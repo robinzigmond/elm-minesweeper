@@ -3,7 +3,7 @@ module Main exposing (Model, Msg(..), init, main, realGrid, startGrid, update, v
 import Array exposing (Array, fromList, repeat, toList)
 import Browser
 import Html exposing (..)
-import Html.Attributes exposing (style)
+import Html.Attributes exposing (class)
 import Html.Events exposing (onClick)
 import List exposing (map)
 import Logic exposing (uncover)
@@ -87,17 +87,8 @@ viewCell ( x, y ) stat =
                     [ text (String.fromInt n) ]
     in
     div
-        [ style "display" "inline-block"
-        , style "width" "20px"
-        , style "height" "20px"
-        , style "background-color" "#aaa"
-        , style "color" "black"
-        , style "margin-right" "2px"
-        , style "margin-bottom" "2px"
-        , style "overflow" "hidden"
-        , style "line-height" "1.3"
-        , style "text-align" "center"
-        , onClick (Click x y)
+        [ class "cell",
+          onClick (Click x y)
         ]
         (content stat)
 
@@ -112,4 +103,5 @@ viewRow width y cells =
 
 view : Model -> Html Msg
 view model =
-    model.gridState |> Array.indexedMap (\y status -> viewRow model.width y status) |> toList |> div []
+    model.gridState |> Array.indexedMap (\y status -> viewRow model.width y status)
+    |> toList |> div [class "game"]
