@@ -7,7 +7,7 @@ import Html.Attributes exposing (class)
 import Html.Events exposing (custom, onClick)
 import Json.Decode as Decode
 import List exposing (map)
-import Logic exposing (countPossibleMines, insert, lookup, reveal, uncover)
+import Logic exposing (countKnownMines, countPossibleMines, insert, lookup, reveal, uncover)
 import Random exposing (generate)
 import RandomGrid exposing (randomGrid)
 import Types exposing (Grid, RealGrid, RealStatus(..), Status(..))
@@ -104,7 +104,6 @@ update msg model =
 
                         Nothing ->
                             KnownMine
-
             in
             ( { model | gridState = insert ( x, y ) toggleResult model.gridState }, Cmd.none )
 
@@ -163,11 +162,22 @@ viewRow playing width y cells =
 view : Model -> Html Msg
 view model =
     let
+        mineCounter =
+            p []
+                [ text "Mines Remaining "
+                , span [ class "mine-count" ]
+                    [ text (String.fromInt (model.numMines - countKnownMines model.gridState)) ]
+                ]
+
         grid =
             model.gridState
                 |> Array.indexedMap (\y status -> viewRow model.playing model.width y status)
                 |> toList
-                |> div [ class "game" ]
+                |> (\l ->
+                        mineCounter
+                            :: l
+                            |> div [ class "game" ]
+                   )
 
         newGameButton =
             button [ onClick NewGame ] [ text "New Game" ]

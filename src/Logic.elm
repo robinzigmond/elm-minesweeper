@@ -1,4 +1,4 @@
-module Logic exposing (countPossibleMines, reveal, uncover, insert, lookup)
+module Logic exposing (countKnownMines, countPossibleMines, insert, lookup, reveal, uncover)
 
 import Array exposing (Array, get, set)
 import List exposing (filter, length, map)
@@ -10,6 +10,13 @@ countPossibleMines : Grid -> Int
 countPossibleMines g =
     g
         |> Array.map (Array.filter (\a -> a == Unknown || a == KnownMine) >> Array.length)
+        |> Array.foldl (+) 0
+
+
+countKnownMines : Grid -> Int
+countKnownMines g =
+    g
+        |> Array.map (Array.filter (\a -> a == KnownMine) >> Array.length)
         |> Array.foldl (+) 0
 
 
