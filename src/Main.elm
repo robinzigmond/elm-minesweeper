@@ -4,9 +4,10 @@ import Array exposing (Array, fromList, repeat, toList)
 import Browser
 import Html exposing (..)
 import Html.Attributes exposing (class)
-import Html.Events exposing (onClick)
+import Html.Events exposing (custom, onClick)
+import Json.Decode as Decode
 import List exposing (map)
-import Logic exposing (countUnknowns, reveal, uncover)
+import Logic exposing (countPossibleMines, insert, lookup, reveal, uncover)
 import Random exposing (generate)
 import RandomGrid exposing (randomGrid)
 import Types exposing (Grid, RealGrid, RealStatus(..), Status(..))
@@ -63,6 +64,7 @@ type Msg
     = Click Int Int
     | NewGrid RealGrid
     | NewGame
+    | ToggleMine Int Int
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -74,7 +76,7 @@ update msg model =
                     uncover model.realGrid model.gridState ( x, y )
 
                 hasWon =
-                    countUnknowns result == model.numMines
+                    countPossibleMines result == model.numMines
             in
             if reveal model.realGrid ( x, y ) == Just Mine then
                 ( { model | gridState = result, playing = False }
@@ -83,6 +85,28 @@ update msg model =
 
             else
                 ( { model | gridState = result, won = hasWon }, Cmd.none )
+
+        ToggleMine x y ->
+            let
+                current =
+                    lookup model.gridState ( x, y )
+
+                toggleResult =
+                    case current of
+                        Just Unknown ->
+                            KnownMine
+
+                        Just KnownMine ->
+                            Unknown
+
+                        Just state ->
+                            state
+
+                        Nothing ->
+                            KnownMine
+
+            in
+            ( { model | gridState = insert ( x, y ) toggleResult model.gridState }, Cmd.none )
 
         NewGrid newGrid ->
             ( { model | realGrid = newGrid }, Cmd.none )
@@ -95,6 +119,11 @@ update msg model =
 
 
 -- VIEW
+
+
+onRightClick : msg -> Attribute msg
+onRightClick message =
+    custom "contextmenu" (Decode.succeed { message = message, preventDefault = True, stopPropagation = False })
 
 
 viewCell : Bool -> ( Int, Int ) -> Status -> Html Msg
@@ -113,7 +142,7 @@ viewCell playing ( x, y ) stat =
 
         actions =
             if playing then
-                [ onClick (Click x y) ]
+                [ onClick (Click x y), onRightClick (ToggleMine x y) ]
 
             else
                 []
