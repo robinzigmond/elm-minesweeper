@@ -1,9 +1,16 @@
-module Logic exposing (uncover)
+module Logic exposing (countUnknowns, reveal, uncover)
 
 import Array exposing (Array, get, set)
 import List exposing (filter, length, map)
 import Set exposing (fromList, toList)
 import Types exposing (Grid, RealGrid, RealStatus(..), Status(..))
+
+
+countUnknowns : Grid -> Int
+countUnknowns g =
+    g
+        |> Array.map (Array.filter (\a -> a == Unknown) >> Array.length)
+        |> Array.foldl (+) 0
 
 
 reveal : RealGrid -> ( Int, Int ) -> Maybe RealStatus
