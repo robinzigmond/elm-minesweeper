@@ -9,7 +9,7 @@ import Json.Decode as Decode
 import List exposing (map)
 import Logic exposing (countKnownMines, countPossibleMines, insert, lookup, reveal, uncover)
 import Random exposing (generate)
-import RandomGrid exposing (randomGrid)
+import RandomGrid exposing (randomGrid, repeatUntilSafe)
 import Types exposing (Grid, RealGrid, RealStatus(..), Status(..))
 
 
@@ -27,6 +27,7 @@ type alias Model =
     , width : Int
     , height : Int
     , numMines : Int
+    , firstTurn : Bool
     , gridState : Grid
     , realGrid : RealGrid
     }
@@ -49,6 +50,7 @@ init _ =
       , width = 9
       , height = 9
       , numMines = 13
+      , firstTurn = True
       , gridState = startGrid 9 9
       , realGrid = startRealGrid 9 9
       }
@@ -63,6 +65,7 @@ init _ =
 type Msg
     = Click Int Int
     | NewGrid RealGrid
+    | Substitute Int Int RealGrid
     | NewGame
     | ToggleMine Int Int
 
@@ -77,14 +80,29 @@ update msg model =
 
                 hasWon =
                     countPossibleMines result == model.numMines
+
+                isMine =
+                    reveal model.realGrid ( x, y ) == Just Mine
+
+                redo =
+                    model.firstTurn && isMine
             in
-            if reveal model.realGrid ( x, y ) == Just Mine then
-                ( { model | gridState = result, playing = False }
-                , Random.generate NewGrid (randomGrid 9 9 13)
+            if redo then
+                ( { model | gridState = result, firstTurn = False }
+                , Random.generate (Substitute x y) (repeatUntilSafe ( x, y ) 9 9 13)
                 )
 
+            else if isMine then
+                if lookup model.gridState ( x, y ) == Just KnownMine then
+                    ( model, Cmd.none )
+
+                else
+                    ( { model | gridState = result, firstTurn = False, playing = False }
+                    , Random.generate NewGrid (randomGrid 9 9 13)
+                    )
+
             else
-                ( { model | gridState = result, won = hasWon }, Cmd.none )
+                ( { model | gridState = result, firstTurn = False, won = hasWon }, Cmd.none )
 
         ToggleMine x y ->
             let
@@ -108,10 +126,15 @@ update msg model =
             ( { model | gridState = insert ( x, y ) toggleResult model.gridState }, Cmd.none )
 
         NewGrid newGrid ->
-            ( { model | realGrid = newGrid }, Cmd.none )
+            ( { model | realGrid = newGrid, firstTurn = True }, Cmd.none )
+
+        Substitute x y newGrid ->
+            ( { model | realGrid = newGrid, gridState = uncover newGrid (startGrid 9 9) ( x, y ) }
+            , Cmd.none
+            )
 
         NewGame ->
-            ( { model | gridState = startGrid 9 9, playing = True, won = False }
+            ( { model | gridState = startGrid 9 9, firstTurn = True, playing = True, won = False }
             , Random.generate NewGrid (randomGrid 9 9 13)
             )
 

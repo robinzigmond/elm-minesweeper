@@ -1,6 +1,7 @@
-module RandomGrid exposing (randomGrid)
+module RandomGrid exposing (randomGrid, repeatUntilSafe)
 
 import Array
+import Logic exposing (reveal)
 import Random exposing (Generator)
 import Random.List exposing (shuffle)
 import Types exposing (RealGrid, RealStatus(..))
@@ -42,3 +43,16 @@ randomGrid width height numMines =
                                         Array.indexedMap update arrs
     in
     Random.map (List.foldl split Array.empty) oneDimensional
+
+
+repeatUntilSafe : ( Int, Int ) -> Int -> Int -> Int -> Generator RealGrid
+repeatUntilSafe clicked width height numMines =
+    let
+        repeat g =
+            if reveal g clicked == Just Mine then
+                repeat g
+
+            else
+                Random.constant g
+    in
+    Random.andThen repeat (randomGrid width height numMines)
