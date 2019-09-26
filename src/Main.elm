@@ -168,9 +168,23 @@ viewCell playing ( x, y ) stat =
 
             else
                 []
+
+        otherClass =
+            case stat of
+                Unknown ->
+                    " empty"
+
+                KnownMine ->
+                    " mine"
+
+                _ ->
+                    ""
     in
     div
-        (class "cell" :: actions)
+        (class
+            ("cell" ++ otherClass)
+            :: actions
+        )
         (content stat)
 
 
@@ -186,24 +200,25 @@ view : Model -> Html Msg
 view model =
     let
         mineCounter =
-            p []
+            p [ class "mines-remaining" ]
                 [ text "Mines Remaining "
-                , span [ class "mine-count" ]
-                    [ text (String.fromInt (model.numMines - countKnownMines model.gridState)) ]
+                , span [ class "mine-count" ] <|
+                    map (\c -> span [ class "digit" ] [ text (String.fromChar c) ]) <|
+                        String.toList
+                            (String.padLeft 3 '0' <|
+                                String.fromInt (model.numMines - countKnownMines model.gridState)
+                            )
                 ]
 
         grid =
             model.gridState
                 |> Array.indexedMap (\y status -> viewRow model.playing model.width y status)
                 |> toList
-                |> (\l ->
-                        mineCounter
-                            :: l
-                            |> div [ class "game" ]
-                   )
+                |> (\l -> mineCounter :: l)
+                |> div [ class "game" ]
 
         newGameButton =
-            button [ onClick NewGame ] [ text "New Game" ]
+            button [ onClick NewGame, class "new-game" ] [ text "New Game" ]
 
         failureMessage =
             div [ class "notice failure" ] [ text "Sorry you lost the game!" ]
@@ -214,13 +229,13 @@ view model =
         elements =
             if model.playing then
                 if model.won then
-                    [ grid, newGameButton, winMessage ]
+                    [ grid, winMessage, newGameButton ]
 
                 else
                     [ grid, newGameButton ]
 
             else
-                [ grid, newGameButton, failureMessage ]
+                [ grid, failureMessage, newGameButton ]
     in
     div [ class "container" ] elements
 
