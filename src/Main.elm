@@ -1,15 +1,12 @@
 module Main exposing (main)
 
-import Array exposing (Array, fromList, repeat, toList)
+import Array exposing (fromList)
 import Browser
+import Game exposing (GameState, InGameMsg(..), startGame, updateGame, viewGame)
 import Html exposing (..)
-import Html.Attributes exposing (class)
-import Html.Events exposing (custom, onClick)
-import Json.Decode as Decode
+import Html.Attributes exposing (class, type_, value)
+import Html.Events exposing (onClick, onInput)
 import List exposing (map)
-import Logic exposing (countKnownMines, countPossibleMines, insert, lookup, reveal, uncover)
-import Random exposing (generate)
-import RandomGrid exposing (randomGrid, repeatUntilSafe)
 import Types exposing (Grid, RealGrid, RealStatus(..), Status(..))
 
 
@@ -22,39 +19,23 @@ main =
 
 
 type alias Model =
-    { playing : Bool
-    , won : Bool
-    , width : Int
+    { width : Int
     , height : Int
     , numMines : Int
-    , firstTurn : Bool
-    , gridState : Grid
-    , realGrid : RealGrid
+    , error : Maybe String
+    , gameState : Maybe GameState
     }
-
-
-startGrid : Int -> Int -> Grid
-startGrid width height =
-    repeat height (repeat width Unknown)
-
-
-startRealGrid : Int -> Int -> RealGrid
-startRealGrid width height =
-    repeat height (repeat width Safe)
 
 
 init : () -> ( Model, Cmd Msg )
 init _ =
-    ( { playing = True
-      , won = False
-      , width = 9
+    ( { width = 9
       , height = 9
       , numMines = 13
-      , firstTurn = True
-      , gridState = startGrid 9 9
-      , realGrid = startRealGrid 9 9
+      , gameState = Nothing
+      , error = Nothing
       }
-    , Random.generate NewGrid (randomGrid 9 9 13)
+    , Cmd.none
     )
 
 
@@ -62,182 +43,162 @@ init _ =
 -- UPDATE
 
 
+type InputField
+    = Width
+    | Height
+    | NumMines
+
+
+type InputMsg
+    = Increment InputField
+    | Decrement InputField
+    | New InputField Int
+    | StartGame
+    | Menu
+    | Error String
+
+
 type Msg
-    = Click Int Int
-    | NewGrid RealGrid
-    | Substitute Int Int RealGrid
-    | NewGame
-    | ToggleMine Int Int
+    = InGame InGameMsg
+    | Input InputMsg
+
+
+updateInput : InputMsg -> Model -> ( Model, Cmd Msg )
+updateInput msg model =
+    case msg of
+        Increment field ->
+            ( case field of
+                Width ->
+                    { model | width = model.width + 1 }
+
+                Height ->
+                    { model | height = model.height + 1 }
+
+                NumMines ->
+                    { model | numMines = model.numMines + 1 }
+            , Cmd.none
+            )
+
+        Decrement field ->
+            ( case field of
+                Width ->
+                    { model | width = model.width - 1 }
+
+                Height ->
+                    { model | height = model.height - 1 }
+
+                NumMines ->
+                    { model | numMines = model.numMines - 1 }
+            , Cmd.none
+            )
+
+        New field val ->
+            ( case field of
+                Width ->
+                    { model | width = val }
+
+                Height ->
+                    { model | height = val }
+
+                NumMines ->
+                    { model | numMines = val }
+            , Cmd.none
+            )
+
+        Error errMsg ->
+            ( { model | error = Just errMsg }, Cmd.none )
+
+        StartGame ->
+            let
+                ( startState, cmd ) =
+                    updateGame model.width model.height model.numMines NewGame <|
+                        startGame model.width model.height model.numMines
+            in
+            ( { model | gameState = Just startState }, Cmd.map InGame cmd )
+
+        Menu ->
+            ( { model | gameState = Nothing }, Cmd.none )
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Click x y ->
-            let
-                result =
-                    uncover model.realGrid model.gridState ( x, y )
-
-                hasWon =
-                    countPossibleMines result == model.numMines
-
-                isMine =
-                    reveal model.realGrid ( x, y ) == Just Mine
-
-                redo =
-                    model.firstTurn && isMine
-            in
-            if redo then
-                ( { model | gridState = result, firstTurn = False }
-                , Random.generate (Substitute x y) (repeatUntilSafe ( x, y ) 9 9 13)
-                )
-
-            else if isMine then
-                if lookup model.gridState ( x, y ) == Just KnownMine then
-                    ( model, Cmd.none )
-
-                else
-                    ( { model | gridState = result, firstTurn = False, playing = False }
-                    , Random.generate NewGrid (randomGrid 9 9 13)
+        InGame gameMsg ->
+            case model.gameState of
+                Just state ->
+                    let
+                        ( newModel, cmd ) =
+                            updateGame model.width model.height model.numMines gameMsg state
+                    in
+                    ( { model | gameState = Just newModel }
+                    , Cmd.map InGame cmd
                     )
 
-            else
-                ( { model | gridState = result, firstTurn = False, won = hasWon }, Cmd.none )
+                Nothing ->
+                    ( model, Cmd.none )
 
-        ToggleMine x y ->
-            let
-                current =
-                    lookup model.gridState ( x, y )
-
-                toggleResult =
-                    case current of
-                        Just Unknown ->
-                            KnownMine
-
-                        Just KnownMine ->
-                            Unknown
-
-                        Just state ->
-                            state
-
-                        Nothing ->
-                            KnownMine
-            in
-            ( { model | gridState = insert ( x, y ) toggleResult model.gridState }, Cmd.none )
-
-        NewGrid newGrid ->
-            ( { model | realGrid = newGrid, firstTurn = True }, Cmd.none )
-
-        Substitute x y newGrid ->
-            ( { model | realGrid = newGrid, gridState = uncover newGrid (startGrid 9 9) ( x, y ) }
-            , Cmd.none
-            )
-
-        NewGame ->
-            ( { model | gridState = startGrid 9 9, firstTurn = True, playing = True, won = False }
-            , Random.generate NewGrid (randomGrid 9 9 13)
-            )
+        Input inputMsg ->
+            updateInput inputMsg model
 
 
 
 -- VIEW
 
 
-onRightClick : msg -> Attribute msg
-onRightClick message =
-    custom "contextmenu" (Decode.succeed { message = message, preventDefault = True, stopPropagation = False })
-
-
-viewCell : Bool -> ( Int, Int ) -> Status -> Html Msg
-viewCell playing ( x, y ) stat =
+viewField : InputField -> Int -> Html InputMsg
+viewField field val =
     let
-        content status =
-            case status of
-                Unknown ->
-                    []
+        fieldText =
+            case field of
+                Width ->
+                    "Grid Width"
 
-                KnownMine ->
-                    [ text "X" ]
+                Height ->
+                    "Grid Height"
 
-                Neighbours n ->
-                    [ text (String.fromInt n) ]
-
-        actions =
-            if playing then
-                [ onClick (Click x y), onRightClick (ToggleMine x y) ]
-
-            else
-                []
-
-        otherClass =
-            case stat of
-                Unknown ->
-                    " empty"
-
-                KnownMine ->
-                    " mine"
-
-                _ ->
-                    ""
+                NumMines ->
+                    "Number of Mines"
     in
-    div
-        (class
-            ("cell" ++ otherClass)
-            :: actions
-        )
-        (content stat)
+    div []
+        [ text fieldText
+        , button [ onClick <| Decrement field ] [ text "-" ]
+        , input
+            [ type_ "number"
+            , value <| String.fromInt val
+            , onInput <| New field << Maybe.withDefault 0 << String.toInt
+            ]
+            []
+        , button [ onClick <| Increment field ] [ text "+" ]
+        ]
 
 
-viewRow : Bool -> Int -> Int -> Array Status -> Html Msg
-viewRow playing width y cells =
-    cells
-        |> Array.indexedMap (\x status -> viewCell playing ( x, y ) status)
-        |> toList
-        |> div []
+viewInput : Int -> Int -> Int -> Maybe String -> Html InputMsg
+viewInput width height numMines maybeErr =
+    div [] <|
+        (++)
+            (map (\( field, val ) -> viewField field val)
+                [ ( Width, width ), ( Height, height ), ( NumMines, numMines ) ]
+            )
+        <|
+            [ button [ onClick StartGame ] [ text "Start Game" ] ]
 
 
 view : Model -> Html Msg
 view model =
-    let
-        mineCounter =
-            p [ class "mines-remaining" ]
-                [ text "Mines Remaining "
-                , span [ class "mine-count" ] <|
-                    map (\c -> span [ class "digit" ] [ text (String.fromChar c) ]) <|
-                        String.toList
-                            (String.padLeft 3 '0' <|
-                                String.fromInt (model.numMines - countKnownMines model.gridState)
-                            )
-                ]
+    div [] <|
+        (case model.gameState of
+            Nothing ->
+                Html.map Input <| viewInput model.width model.height model.numMines model.error
 
-        grid =
-            model.gridState
-                |> Array.indexedMap (\y status -> viewRow model.playing model.width y status)
-                |> toList
-                |> (\l -> mineCounter :: l)
-                |> div [ class "game" ]
-
-        newGameButton =
-            button [ onClick NewGame, class "new-game" ] [ text "New Game" ]
-
-        failureMessage =
-            div [ class "notice failure" ] [ text "Sorry you lost the game!" ]
-
-        winMessage =
-            div [ class "notice win" ] [ text "Well done, you uncovered everything but the mines!" ]
-
-        elements =
-            if model.playing then
-                if model.won then
-                    [ grid, winMessage, newGameButton ]
+            Just game ->
+                Html.map InGame <| viewGame game
+        )
+            :: (if model.gameState == Nothing then
+                    []
 
                 else
-                    [ grid, newGameButton ]
-
-            else
-                [ grid, failureMessage, newGameButton ]
-    in
-    div [ class "container" ] elements
+                    [ button [ onClick (Input Menu), class "new-game" ] [ text "Change game options" ] ]
+               )
 
 
 
