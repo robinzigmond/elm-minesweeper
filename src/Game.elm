@@ -211,7 +211,7 @@ viewGame model =
                 |> div [ class "game" ]
 
         newGameButton =
-            button [ onClick NewGame, class "new-game" ] [ text "New Game" ]
+            button [ onClick NewGame, class "main-button" ] [ text "New Game" ]
 
         failureMessage =
             div [ class "notice failure" ] [ text "Sorry you lost the game!" ]

@@ -1,0 +1,47 @@
+input[type=number]::-webkit-inner-spin-button, 
+input[type=number]::-webkit-outer-spin-button { 
+  -webkit-appearance: none; 
+  margin: 0; 
+}
+
+.game-options {
+  border: 2px solid $blue;
+  padding: 30px 40px;
+  background-color: $formbg;
+  border-radius: 30px;
+}
+
+.form-title {
+  margin-bottom: 40px;
+  margin-top: 0;
+  font-size: 28px;
+  color: $blue;
+}
+
+.single-option {
+  line-height: 0;
+  margin-bottom: 30px;
+
+  input {
+    color: $blue;
+    font-size: 18px;
+    padding: 5px 10px;
+    border: 1px solid $blue;
+  }
+}
+
+.input-container {
+  display: flex;
+}
+
+.field-label {
+  font-size: 18px;
+}
+
+.input-btn {
+  color: white;
+  background-color: $blue;
+  border: none;
+  flex: 0 0 25px;
+  cursor: pointer;
+}

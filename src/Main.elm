@@ -5,7 +5,7 @@ import Browser
 import Game exposing (GameState, InGameMsg(..), startGame, updateGame, viewGame)
 import Html exposing (..)
 import Html.Attributes exposing (class, type_, value)
-import Html.Events exposing (onClick, onInput)
+import Html.Events exposing (onBlur, onClick, onInput)
 import List exposing (map)
 import Types exposing (Grid, RealGrid, RealStatus(..), Status(..))
 
@@ -22,7 +22,6 @@ type alias Model =
     { width : Int
     , height : Int
     , numMines : Int
-    , error : Maybe String
     , gameState : Maybe GameState
     }
 
@@ -33,7 +32,6 @@ init _ =
       , height = 9
       , numMines = 13
       , gameState = Nothing
-      , error = Nothing
       }
     , Cmd.none
     )
@@ -53,14 +51,37 @@ type InputMsg
     = Increment InputField
     | Decrement InputField
     | New InputField Int
+    | CheckMaxMin InputField
     | StartGame
     | Menu
-    | Error String
 
 
 type Msg
     = InGame InGameMsg
     | Input InputMsg
+
+
+type alias ValidationData =
+    { minWidth : Int
+    , maxWidth : Int
+    , minHeight : Int
+    , maxHeight : Int
+    , minNumMines : Int -> Int -> Int
+    , maxNumMines : Int -> Int -> Int
+    , standardNumMines : Int -> Int -> Int
+    }
+
+
+defaultValidation : ValidationData
+defaultValidation =
+    { minWidth = 5
+    , maxWidth = 25
+    , minHeight = 5
+    , maxHeight = 25
+    , minNumMines = \width height -> (width * height // 8) + 1
+    , standardNumMines = \width height -> width * height // 6
+    , maxNumMines = \width height -> width * height // 4
+    }
 
 
 updateInput : InputMsg -> Model -> ( Model, Cmd Msg )
@@ -69,26 +90,64 @@ updateInput msg model =
         Increment field ->
             ( case field of
                 Width ->
-                    { model | width = model.width + 1 }
+                    let
+                        newVal =
+                            min defaultValidation.maxWidth <| model.width + 1
+                    in
+                    { model
+                        | width = newVal
+                        , numMines = defaultValidation.standardNumMines newVal model.height
+                    }
 
                 Height ->
-                    { model | height = model.height + 1 }
+                    let
+                        newVal =
+                            min defaultValidation.maxHeight <| model.height + 1
+                    in
+                    { model
+                        | height = newVal
+                        , numMines = defaultValidation.standardNumMines model.width newVal
+                    }
 
                 NumMines ->
-                    { model | numMines = model.numMines + 1 }
+                    { model
+                        | numMines =
+                            min (defaultValidation.maxNumMines model.width model.height) <|
+                                model.numMines
+                                    + 1
+                    }
             , Cmd.none
             )
 
         Decrement field ->
             ( case field of
                 Width ->
-                    { model | width = model.width - 1 }
+                    let
+                        newVal =
+                            max defaultValidation.minWidth <| model.width - 1
+                    in
+                    { model
+                        | width = newVal
+                        , numMines = defaultValidation.standardNumMines newVal model.height
+                    }
 
                 Height ->
-                    { model | height = model.height - 1 }
+                    let
+                        newVal =
+                            max defaultValidation.minHeight <| model.height - 1
+                    in
+                    { model
+                        | height = newVal
+                        , numMines = defaultValidation.standardNumMines model.width newVal
+                    }
 
                 NumMines ->
-                    { model | numMines = model.numMines - 1 }
+                    { model
+                        | numMines =
+                            max (defaultValidation.minNumMines model.width model.height) <|
+                                model.numMines
+                                    - 1
+                    }
             , Cmd.none
             )
 
@@ -105,8 +164,48 @@ updateInput msg model =
             , Cmd.none
             )
 
-        Error errMsg ->
-            ( { model | error = Just errMsg }, Cmd.none )
+        CheckMaxMin field ->
+            let
+                val =
+                    case field of
+                        Width ->
+                            model.width
+
+                        Height ->
+                            model.height
+
+                        NumMines ->
+                            model.numMines
+            in
+            ( case field of
+                Width ->
+                    let
+                        newVal =
+                            max defaultValidation.minWidth <| min defaultValidation.maxWidth val
+                    in
+                    { model
+                        | width = newVal
+                        , numMines = defaultValidation.standardNumMines newVal model.height
+                    }
+
+                Height ->
+                    let
+                        newVal =
+                            max defaultValidation.minHeight <| min defaultValidation.maxHeight val
+                    in
+                    { model
+                        | height = newVal
+                        , numMines = defaultValidation.standardNumMines model.width newVal
+                    }
+
+                NumMines ->
+                    { model
+                        | numMines =
+                            max (defaultValidation.minNumMines model.width model.height) <|
+                                min (defaultValidation.maxNumMines model.width model.height) val
+                    }
+            , Cmd.none
+            )
 
         StartGame ->
             let
@@ -159,28 +258,32 @@ viewField field val =
                 NumMines ->
                     "Number of Mines"
     in
-    div []
-        [ text fieldText
-        , button [ onClick <| Decrement field ] [ text "-" ]
-        , input
-            [ type_ "number"
-            , value <| String.fromInt val
-            , onInput <| New field << Maybe.withDefault 0 << String.toInt
+    div [ class "single-option" ]
+        [ p [ class "field-label" ] [ text fieldText ]
+        , div [ class "input-container" ]
+            [ button [ class "input-btn", onClick <| Decrement field ] [ text "-" ]
+            , input
+                [ type_ "number"
+                , value <| String.fromInt val
+                , onBlur (CheckMaxMin field)
+                , onInput <| New field << Maybe.withDefault 0 << String.toInt
+                ]
+                []
+            , button [ class "input-btn", onClick <| Increment field ] [ text "+" ]
             ]
-            []
-        , button [ onClick <| Increment field ] [ text "+" ]
         ]
 
 
-viewInput : Int -> Int -> Int -> Maybe String -> Html InputMsg
-viewInput width height numMines maybeErr =
-    div [] <|
+viewInput : Int -> Int -> Int -> Html InputMsg
+viewInput width height numMines =
+    div [ class "game-options" ] <|
         (++)
-            (map (\( field, val ) -> viewField field val)
-                [ ( Width, width ), ( Height, height ), ( NumMines, numMines ) ]
+            (h3 [ class "form-title" ] [ text "Game Options" ]
+                :: map (\( field, val ) -> viewField field val)
+                    [ ( Width, width ), ( Height, height ), ( NumMines, numMines ) ]
             )
         <|
-            [ button [ onClick StartGame ] [ text "Start Game" ] ]
+            [ button [ class "main-button", onClick StartGame ] [ text "Start Game" ] ]
 
 
 view : Model -> Html Msg
@@ -188,7 +291,7 @@ view model =
     div [] <|
         (case model.gameState of
             Nothing ->
-                Html.map Input <| viewInput model.width model.height model.numMines model.error
+                Html.map Input <| viewInput model.width model.height model.numMines
 
             Just game ->
                 Html.map InGame <| viewGame game
@@ -197,7 +300,7 @@ view model =
                     []
 
                 else
-                    [ button [ onClick (Input Menu), class "new-game" ] [ text "Change game options" ] ]
+                    [ button [ onClick (Input Menu), class "main-button" ] [ text "Change game options" ] ]
                )
 
 
