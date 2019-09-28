@@ -1,6 +1,7 @@
 module RandomGrid exposing (randomGrid, repeatUntilSafe)
 
 import Array
+import Debug
 import Logic exposing (reveal)
 import Random exposing (Generator)
 import Random.List exposing (shuffle)

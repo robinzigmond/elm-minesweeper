@@ -7,7 +7,6 @@ import Html exposing (..)
 import Html.Attributes exposing (class, type_, value)
 import Html.Events exposing (onBlur, onClick, onInput)
 import List exposing (map)
-import Types exposing (Grid, RealGrid, RealStatus(..), Status(..))
 
 
 main =
@@ -22,6 +21,7 @@ type alias Model =
     { width : Int
     , height : Int
     , numMines : Int
+    , message : Maybe ( InputField, String )
     , gameState : Maybe GameState
     }
 
@@ -31,6 +31,7 @@ init _ =
     ( { width = 9
       , height = 9
       , numMines = 13
+      , message = Nothing
       , gameState = Nothing
       }
     , Cmd.none
@@ -78,7 +79,7 @@ defaultValidation =
     , maxWidth = 25
     , minHeight = 5
     , maxHeight = 25
-    , minNumMines = \width height -> (width * height // 8) + 1
+    , minNumMines = \width height -> ceiling <| toFloat (width * height // 8)
     , standardNumMines = \width height -> width * height // 6
     , maxNumMines = \width height -> width * height // 4
     }
@@ -90,64 +91,116 @@ updateInput msg model =
         Increment field ->
             ( case field of
                 Width ->
-                    let
-                        newVal =
-                            min defaultValidation.maxWidth <| model.width + 1
-                    in
-                    { model
-                        | width = newVal
-                        , numMines = defaultValidation.standardNumMines newVal model.height
-                    }
+                    if model.width + 1 > defaultValidation.maxWidth then
+                        { model
+                            | width = defaultValidation.maxWidth
+                            , numMines =
+                                defaultValidation.standardNumMines defaultValidation.maxWidth model.height
+                            , message =
+                                Just
+                                    ( Width
+                                    , "The maximum width allowed is " ++ String.fromInt defaultValidation.maxWidth
+                                    )
+                        }
+
+                    else
+                        { model
+                            | width = model.width + 1
+                            , message = Nothing
+                        }
 
                 Height ->
-                    let
-                        newVal =
-                            min defaultValidation.maxHeight <| model.height + 1
-                    in
-                    { model
-                        | height = newVal
-                        , numMines = defaultValidation.standardNumMines model.width newVal
-                    }
+                    if model.height + 1 > defaultValidation.maxHeight then
+                        { model
+                            | height = defaultValidation.maxHeight
+                            , numMines =
+                                defaultValidation.standardNumMines model.width defaultValidation.maxHeight
+                            , message =
+                                Just
+                                    ( Height
+                                    , "The maximum height allowed is " ++ String.fromInt defaultValidation.maxHeight
+                                    )
+                        }
+
+                    else
+                        { model
+                            | height = model.height + 1
+                            , message = Nothing
+                        }
 
                 NumMines ->
-                    { model
-                        | numMines =
-                            min (defaultValidation.maxNumMines model.width model.height) <|
-                                model.numMines
-                                    + 1
-                    }
+                    if (model.numMines + 1) > defaultValidation.maxNumMines model.width model.height then
+                        { model
+                            | numMines = defaultValidation.maxNumMines model.width model.height
+                            , message =
+                                Just
+                                    ( NumMines
+                                    , "You can't have more than "
+                                        ++ String.fromInt (defaultValidation.maxNumMines model.width model.height)
+                                        ++ " mines for this grid size - it would be too hard!"
+                                    )
+                        }
+
+                    else
+                        { model | numMines = model.numMines + 1, message = Nothing }
             , Cmd.none
             )
 
         Decrement field ->
             ( case field of
                 Width ->
-                    let
-                        newVal =
-                            max defaultValidation.minWidth <| model.width - 1
-                    in
-                    { model
-                        | width = newVal
-                        , numMines = defaultValidation.standardNumMines newVal model.height
-                    }
+                    if model.width - 1 < defaultValidation.minWidth then
+                        { model
+                            | width = defaultValidation.minWidth
+                            , numMines =
+                                defaultValidation.standardNumMines defaultValidation.minWidth model.height
+                            , message =
+                                Just
+                                    ( Width
+                                    , "The minimum width allowed is " ++ String.fromInt defaultValidation.minWidth
+                                    )
+                        }
+
+                    else
+                        { model
+                            | width = model.width - 1
+                            , message = Nothing
+                        }
 
                 Height ->
-                    let
-                        newVal =
-                            max defaultValidation.minHeight <| model.height - 1
-                    in
-                    { model
-                        | height = newVal
-                        , numMines = defaultValidation.standardNumMines model.width newVal
-                    }
+                    if model.height - 1 < defaultValidation.minHeight then
+                        { model
+                            | height = defaultValidation.minHeight
+                            , numMines =
+                                defaultValidation.standardNumMines model.width defaultValidation.minHeight
+                            , message =
+                                Just
+                                    ( Height
+                                    , "The minimum height allowed is " ++ String.fromInt defaultValidation.minHeight
+                                    )
+                        }
+
+                    else
+                        { model
+                            | height = model.height - 1
+                            , message = Nothing
+                        }
 
                 NumMines ->
-                    { model
-                        | numMines =
-                            max (defaultValidation.minNumMines model.width model.height) <|
-                                model.numMines
-                                    - 1
-                    }
+                    if (model.numMines - 1) > defaultValidation.minNumMines model.width model.height then
+                        { model
+                            | numMines = defaultValidation.minNumMines model.width model.height
+                            , message =
+                                Just
+                                    ( NumMines
+                                    , "You can't have fewer than "
+                                        ++ String.fromInt (defaultValidation.minNumMines model.width model.height)
+                                        ++ " mines for this grid size - it would be too easy!"
+                                    )
+                        }
+
+                    else
+                        { model | numMines = model.numMines - 1, message = Nothing }
             , Cmd.none
             )
 
@@ -176,34 +229,85 @@ updateInput msg model =
 
                         NumMines ->
                             model.numMines
+
+                maxVal =
+                    case field of
+                        Width ->
+                            defaultValidation.maxWidth
+
+                        Height ->
+                            defaultValidation.maxHeight
+
+                        NumMines ->
+                            defaultValidation.maxNumMines model.width model.height
+
+                minVal =
+                    case field of
+                        Width ->
+                            defaultValidation.minWidth
+
+                        Height ->
+                            defaultValidation.minHeight
+
+                        NumMines ->
+                            defaultValidation.minNumMines model.width model.height
+
+                maxMessage =
+                    case field of
+                        Width ->
+                            "The maximum width allowed is " ++ String.fromInt maxVal
+
+                        Height ->
+                            "The maximum height allowed is " ++ String.fromInt maxVal
+
+                        NumMines ->
+                            "You can't have more than "
+                                ++ String.fromInt maxVal
+                                ++ " mines for this grid size - it would be too hard!"
+
+                minMessage =
+                    case field of
+                        Width ->
+                            "The minimum width allowed is " ++ String.fromInt minVal
+
+                        Height ->
+                            "The minimum height allowed is " ++ String.fromInt minVal
+
+                        NumMines ->
+                            "You can't have fewer than "
+                                ++ String.fromInt minVal
+                                ++ " mines for this grid size - it would be too easy!"
             in
             ( case field of
                 Width ->
-                    let
-                        newVal =
-                            max defaultValidation.minWidth <| min defaultValidation.maxWidth val
-                    in
-                    { model
-                        | width = newVal
-                        , numMines = defaultValidation.standardNumMines newVal model.height
-                    }
+                    if val > maxVal then
+                        { model | width = maxVal, message = Just ( Width, maxMessage ) }
+
+                    else if val < minVal then
+                        { model | width = minVal, message = Just ( Width, minMessage ) }
+
+                    else
+                        { model | width = val, message = Nothing }
 
                 Height ->
-                    let
-                        newVal =
-                            max defaultValidation.minHeight <| min defaultValidation.maxHeight val
-                    in
-                    { model
-                        | height = newVal
-                        , numMines = defaultValidation.standardNumMines model.width newVal
-                    }
+                    if val > maxVal then
+                        { model | height = maxVal, message = Just ( Height, maxMessage ) }
+
+                    else if val < minVal then
+                        { model | height = minVal, message = Just ( Height, minMessage ) }
+
+                    else
+                        { model | height = val, message = Nothing }
 
                 NumMines ->
-                    { model
-                        | numMines =
-                            max (defaultValidation.minNumMines model.width model.height) <|
-                                min (defaultValidation.maxNumMines model.width model.height) val
-                    }
+                    if val > maxVal then
+                        { model | numMines = maxVal, message = Just ( NumMines, maxMessage ) }
+
+                    else if val < minVal then
+                        { model | numMines = minVal, message = Just ( NumMines, minMessage ) }
+
+                    else
+                        { model | numMines = val, message = Nothing }
             , Cmd.none
             )
 
@@ -244,8 +348,8 @@ update msg model =
 -- VIEW
 
 
-viewField : InputField -> Int -> Html InputMsg
-viewField field val =
+viewField : InputField -> Int -> Maybe ( InputField, String ) -> Html InputMsg
+viewField field val maybeErr =
     let
         fieldText =
             case field of
@@ -257,8 +361,20 @@ viewField field val =
 
                 NumMines ->
                     "Number of Mines"
+
+        errElements =
+            case maybeErr of
+                Nothing ->
+                    []
+
+                Just ( errField, errMsg ) ->
+                    if errField == field then
+                        [ div [ class "error" ] [ text errMsg ] ]
+
+                    else
+                        []
     in
-    div [ class "single-option" ]
+    div [ class "single-option" ] <|
         [ p [ class "field-label" ] [ text fieldText ]
         , div [ class "input-container" ]
             [ button [ class "input-btn", onClick <| Decrement field ] [ text "-" ]
@@ -272,14 +388,15 @@ viewField field val =
             , button [ class "input-btn", onClick <| Increment field ] [ text "+" ]
             ]
         ]
+            ++ errElements
 
 
-viewInput : Int -> Int -> Int -> Html InputMsg
-viewInput width height numMines =
+viewInput : Int -> Int -> Int -> Maybe ( InputField, String ) -> Html InputMsg
+viewInput width height numMines maybeErr =
     div [ class "game-options" ] <|
         (++)
             (h3 [ class "form-title" ] [ text "Game Options" ]
-                :: map (\( field, val ) -> viewField field val)
+                :: map (\( field, val ) -> viewField field val maybeErr)
                     [ ( Width, width ), ( Height, height ), ( NumMines, numMines ) ]
             )
         <|
@@ -291,7 +408,7 @@ view model =
     div [] <|
         (case model.gameState of
             Nothing ->
-                Html.map Input <| viewInput model.width model.height model.numMines
+                Html.map Input <| viewInput model.width model.height model.numMines model.message
 
             Just game ->
                 Html.map InGame <| viewGame game
