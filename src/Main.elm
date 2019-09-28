@@ -106,6 +106,7 @@ updateInput msg model =
                     else
                         { model
                             | width = model.width + 1
+                            , numMines = defaultValidation.standardNumMines (model.width + 1) model.height
                             , message = Nothing
                         }
 
@@ -125,6 +126,7 @@ updateInput msg model =
                     else
                         { model
                             | height = model.height + 1
+                            , numMines = defaultValidation.standardNumMines model.width (model.height + 1)
                             , message = Nothing
                         }
 
@@ -164,6 +166,7 @@ updateInput msg model =
                     else
                         { model
                             | width = model.width - 1
+                            , numMines = defaultValidation.standardNumMines (model.width - 1) model.height
                             , message = Nothing
                         }
 
@@ -183,11 +186,12 @@ updateInput msg model =
                     else
                         { model
                             | height = model.height - 1
+                            , numMines = defaultValidation.standardNumMines model.width (model.height - 1)
                             , message = Nothing
                         }
 
                 NumMines ->
-                    if (model.numMines - 1) > defaultValidation.minNumMines model.width model.height then
+                    if (model.numMines - 1) < defaultValidation.minNumMines model.width model.height then
                         { model
                             | numMines = defaultValidation.minNumMines model.width model.height
                             , message =
@@ -207,10 +211,16 @@ updateInput msg model =
         New field val ->
             ( case field of
                 Width ->
-                    { model | width = val }
+                    { model
+                        | width = val
+                        , numMines = defaultValidation.standardNumMines val model.height
+                    }
 
                 Height ->
-                    { model | height = val }
+                    { model
+                        | height = val
+                        , numMines = defaultValidation.standardNumMines model.width val
+                    }
 
                 NumMines ->
                     { model | numMines = val }
@@ -405,7 +415,7 @@ viewInput width height numMines maybeErr =
 
 view : Model -> Html Msg
 view model =
-    div [] <|
+    div [ class "inner-wrapper" ] <|
         (case model.gameState of
             Nothing ->
                 Html.map Input <| viewInput model.width model.height model.numMines model.message
