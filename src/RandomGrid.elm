@@ -1,7 +1,6 @@
 module RandomGrid exposing (randomGrid, repeatUntilSafe)
 
 import Array
-import Debug
 import Logic exposing (reveal)
 import Random exposing (Generator)
 import Random.List exposing (shuffle)
@@ -51,7 +50,7 @@ repeatUntilSafe clicked width height numMines =
     let
         repeat g =
             if reveal g clicked == Just Mine then
-                repeat g
+                repeatUntilSafe clicked width height numMines
 
             else
                 Random.constant g
